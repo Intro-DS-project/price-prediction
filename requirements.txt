@@ -1,0 +1,8 @@
+numpy
+pandas
+torch
+supabase
+ray
+"ray[tune]"
+scikit-learn
+python-dotenv
