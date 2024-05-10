@@ -179,8 +179,12 @@ if __name__ == '__main__':
     with open(os.path.join(SAVED_FOLDER, "ckpt_path.pkl"), "rb") as f:
         dictionary = pickle.load(f)
     ckpt_path = dictionary["ckpt_path"]
-    
-    checkpoint = torch.load(ckpt_path)
+    try:
+        checkpoint = torch.load(ckpt_path)
+    except Exception as e:
+        print(e)
+        checkpoint = torch.load("model/checkpoint.pt")
+
     val_loss = checkpoint["loss"]
     current_config = checkpoint["config"]
     current_model = RentModel(current_config["embedding_dims"], current_config["out_feature2"], current_config["out_feature3"], current_config["activation"])

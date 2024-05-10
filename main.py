@@ -55,15 +55,18 @@ class Item(BaseModel):
     ward: str
     district: str
 
+app = FastAPI()
+
 checkpoint = {}
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+@app.on_event("startup")
+async def load_model():
+    print("start")
     with open(os.path.join("model", "area.pkl"), "rb") as f:
         dictionary = pickle.load(f)
     checkpoint["area_mean"], checkpoint["area_std"] = dictionary["area_mean"], dictionary["area_std"]
 
-    with open(os.path.join("model", "area.pkl"), "rb") as f:
+    with open(os.path.join("model", "ckpt_path.pkl"), "rb") as f:
         dictionary = pickle.load(f)
     ckpt_path = dictionary["ckpt_path"]
 
@@ -73,15 +76,15 @@ async def lifespan(app: FastAPI):
     checkpoint["model"].load_state_dict(ckpt['model_state_dict'])
     checkpoint["model"].eval()
 
-    yield
-    checkpoint.clear()
 
-app = FastAPI(lifespan=lifespan)
+@app.on_event("shutdown")
+async def clear_model():
+    print("shutdown")
+    checkpoint.clear()
 
 
 @app.post("/predict")
 async def predict(item: Item):
-    print(checkpoint)
     # Validate
     if item.area < 0 or item.num_bedroom < 0 or item.num_diningroom < 0 or item.num_kitchen < 0 or item.num_toilet < 0:
         return {"success": False, "message": "Values can't be lower than 0!"}
@@ -110,18 +113,13 @@ async def predict(item: Item):
 
     # wrap data
     attr = torch.Tensor([area, item.num_bedroom, item.num_diningroom, item.num_kitchen, item.num_toilet]).unsqueeze(0)
-    street = torch.Tensor([encoded_street]).unsqueeze(0)
-    ward = torch.Tensor([encoded_ward]).unsqueeze(0)
-    district = torch.Tensor([encoded_ward]).unsqueeze(0)
+    street = torch.LongTensor([encoded_street])
+    ward = torch.LongTensor([encoded_ward])
+    district = torch.LongTensor([encoded_district])
 
     # Predict
     with torch.inference_mode():
         price = checkpoint["model"](attr, street, ward, district)
 
-    print(price)
-
     # Return 
-    return {"success": True, "price": price}
-
-
-    
+    return {"success": True, "price": price.item()}
