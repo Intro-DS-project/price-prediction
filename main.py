@@ -70,7 +70,12 @@ async def load_model():
         dictionary = pickle.load(f)
     ckpt_path = dictionary["ckpt_path"]
 
-    ckpt = torch.load(ckpt_path)
+    try:
+        ckpt = torch.load(ckpt_path)
+    except Exception as e:
+        print(e)
+        ckpt = torch.load("model/checkpoint.pt")
+
     current_config = ckpt["config"]
     checkpoint["model"] = RentModel(current_config["embedding_dims"], current_config["out_feature2"], current_config["out_feature3"], current_config["activation"])
     checkpoint["model"].load_state_dict(ckpt['model_state_dict'])
