@@ -4,7 +4,7 @@ from torch import nn
 import torch
 from sklearn.model_selection import train_test_split
 import ray
-from ray import tune
+from ray import tune, train
 
 import os
 from dotenv import load_dotenv
@@ -12,6 +12,9 @@ from supabase import create_client, Client
 import datetime
 from datetime import date
 import pickle
+import tempfile
+import uuid
+from pathlib import Path
 
 import prepare_data
 
@@ -146,9 +149,12 @@ def model_tuning(config, train_dataloader, valid_dataloader, checkpoint_dir=None
                 if valid_loss_values[-1] >= valid_loss_values[-2] and valid_loss_values[-2] >= valid_loss_values[-3]:
                     print("Maybe Overfitting... Stop!")
                     break
-        with tune.checkpoint_dir(step=0) as checkpoint_dir:
-            model.save(checkpoint_dir)
-        tune.report(mean_loss=sum(valid_loss_values) / len(valid_loss_values))
+        # with tune.checkpoint_dir(step=0) as checkpoint_dir:
+        #     model.save(checkpoint_dir)
+    tempdir = str(uuid.uuid4())
+    os.makedirs(os.path.join("temp_model", tempdir))
+    torch.save({'model_state_dict': model.state_dict(), 'config': config, 'loss': valid_loss_values[-1]}, os.path.join("temp_model", tempdir, "checkpoint.pt"))
+    train.report({"mean_loss": valid_loss_values[-1]}, checkpoint=train.Checkpoint.from_directory(os.path.join("temp_model", tempdir)))
         
 if __name__ == '__main__':
     load_dotenv()
@@ -165,13 +171,23 @@ if __name__ == '__main__':
     with open(os.path.join(SAVED_FOLDER, "area.pkl"), "rb") as f:
         dictionary = pickle.load(f)
     area_mean, area_std = dictionary["area_mean"], dictionary["area_std"]
-    with open(os.path.join(SAVED_FOLDER, "val_loss.pkl"), "rb") as f:
+
+    # with open(os.path.join(SAVED_FOLDER, "val_loss.pkl"), "rb") as f:
+    #     dictionary = pickle.load(f)
+    # val_loss = dictionary["loss"]
+
+    with open(os.path.join(SAVED_FOLDER, "ckpt_path.pkl"), "rb") as f:
         dictionary = pickle.load(f)
-    val_loss = dictionary["loss"]
-    current_model = torch.load(os.path.join(SAVED_FOLDER,"model.pt"))
+    ckpt_path = dictionary["ckpt_path"]
+    
+    checkpoint = torch.load(ckpt_path)
+    val_loss = checkpoint["loss"]
+    current_config = checkpoint["config"]
+    current_model = RentModel(current_config["embedding_dims"], current_config["out_feature2"], current_config["out_feature3"], current_config["activation"])
+    current_model.load_state_dict(checkpoint['model_state_dict'])
     
     # Evaluate
-    retrain, old_val_loss = evaluate(response.data, area_mean, area_std, current_model, threshold=0.4)
+    retrain, old_val_loss = evaluate(response.data, area_mean, area_std, current_model, val_loss*2)
     if retrain:
         print(old_val_loss)
         # Get data within 1 month
@@ -200,11 +216,21 @@ if __name__ == '__main__':
         valid_dataloader = DataLoader(valid_dataset, batch_size=len(valid_dataset), shuffle=True)
         
         # Config for tuning
+        # config = {
+        #     "embedding_dims": tune.grid_search([32, 64, 128]),
+        #     "out_feature2": tune.grid_search([512, 729, 1024]),
+        #     "out_feature3": tune.grid_search([32, 64, 81]),
+        #     "activation": tune.choice(["relu", "gelu"]),
+        #     "lr": tune.loguniform(1e-4, 1e-5)
+        # }
+
+        Path("temp_model").mkdir(parents=True, exist_ok=True)
+
         config = {
-            "embedding_dims": tune.grid_search([32, 64, 128]),
-            "out_feature2": tune.grid_search([512, 729, 1024]),
-            "out_feature3": tune.grid_search([32, 64, 81]),
-            "act": tune.choice(["relu", "gelu"]),
+            "embedding_dims": tune.grid_search([32, 128]),
+            "out_feature2": tune.grid_search([729, 1024]),
+            "out_feature3": tune.grid_search([64, 81]),
+            "activation": tune.choice(["relu"]),
             "lr": tune.loguniform(1e-4, 1e-5)
         }
         
@@ -214,12 +240,19 @@ if __name__ == '__main__':
             tune.with_parameters(model_tuning, train_dataloader=train_dataloader, valid_dataloader=valid_dataloader),
             config=config,
             progress_reporter=reporter,
-            metric="mean_loss"
+            metric="mean_loss",
+            mode="min",
+            verbose=2
         )
         
         print(analysis.best_checkpoint)
         print(analysis.best_result)
         print(analysis.dataframe())
+
+        new_path = os.path.join(analysis.best_checkpoint.path, "checkpoint.pt")
+        with open("model/ckpt_path.pkl", "wb") as f:
+            pickle.dump({"ckpt_path": new_path}, f)
+
     else:
         print(old_val_loss)
         print("Model is still good")
