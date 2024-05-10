@@ -38,3 +38,12 @@ This will:
   "price": 3.038297414779663
 }
 ```
+
+### Run prediction API with Docker
+- Build Docker image:
+
+```docker build -t <image-name> .```
+
+- Run Docker container (expose port **8000**)
+
+```docker run -p 8000:8000 <image-name>```

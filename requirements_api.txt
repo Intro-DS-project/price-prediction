@@ -1,11 +1,7 @@
 numpy
-torch
-supabase
-ray[data,train,tune,serve]
-scikit-learn
-python-dotenv
 typing-inspect==0.8.0
 typing_extensions==4.5.0
 protobuf==3.20.*
 fastapi
 pydantic
+uvicorn

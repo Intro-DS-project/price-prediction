@@ -2,7 +2,6 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from torch import nn
 import torch
-from sklearn.model_selection import train_test_split
 
 import location
 
