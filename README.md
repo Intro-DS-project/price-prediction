@@ -16,7 +16,7 @@ This will:
 ### Run Prediction API
 ```uvicorn main:app --host <YOUR_HOST_IP> --port <YOUR_HOST_PORT>```
 
-- API Endpoint: /predict
+- API Endpoint: /predict (POST)
 - Request Body example:
 ```
 {
@@ -38,6 +38,16 @@ This will:
   "price": 3.038297414779663
 }
 ```
+
+**Update**: API Endpoint: /loss (GET)
+- Response example:
+```
+{
+  "success": true,
+  "loss": 0.9340711236000061
+}
+```
+
 
 ### Run prediction API with Docker
 - Build Docker image:

@@ -76,6 +76,8 @@ async def load_model():
         print(e)
         ckpt = torch.load("model/checkpoint.pt")
 
+    checkpoint['val_loss'] = ckpt["loss"]
+
     current_config = ckpt["config"]
     checkpoint["model"] = RentModel(current_config["embedding_dims"], current_config["out_feature2"], current_config["out_feature3"], current_config["activation"])
     checkpoint["model"].load_state_dict(ckpt['model_state_dict'])
@@ -86,6 +88,10 @@ async def load_model():
 async def clear_model():
     print("shutdown")
     checkpoint.clear()
+
+@app.get("/loss")
+async def loss():
+    return {"success": True, "loss": checkpoint['val_loss']}
 
 
 @app.post("/predict")
